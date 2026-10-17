@@ -332,4 +332,185 @@ if selected_nav == "🧋 Order Nước & Bánh":
                     "Tên món": selected_drink,
                     "Loại": "Thức uống",
                     "Size": selected_size.split()[0],
-                    
+                    "Ghi chú": f"Sữa: {selected_milk.split('(')[0].strip()} | Topping: {topping_str}",
+                    "Đơn giá": unit_price,
+                    "Số lượng": drink_qty,
+                    "Thành tiền": total_item_price
+                }
+                st.session_state.cart.append(item_data)
+                st.session_state.invoice_paid = False
+                safe_toast(f"Đã thêm {drink_qty}x {selected_drink}!", icon="🧋")
+
+        else: # BÁNH MÌ & BÁNH NGỌT
+            c_bakery, c_qty_b = st.columns([2.5, 1])
+            with c_bakery:
+                selected_bakery = st.selectbox("Chọn loại bánh mì / bánh ngọt:", list(BAKERY_MENU.keys()))
+            with c_qty_b:
+                bakery_qty = st.number_input("Số lượng bánh:", min_value=1, value=1, step=1, key="bakery_qty")
+
+            bakery_info = BAKERY_MENU[selected_bakery]
+            
+            c_b_img, c_b_opts = st.columns([1, 1.8])
+            with c_b_img:
+                st.image(bakery_info["img"], caption=selected_bakery, use_container_width=True)
+            with c_b_opts:
+                st.write(f"**Mô tả:** {bakery_info['desc']}")
+                heat_option = st.checkbox("🔥 Hâm nóng bánh trước khi giao", value=True)
+                extra_cheese = st.checkbox("🧀 Thêm Phô Mai Nướng (+10,000 VNĐ)", value=False)
+
+            bakery_unit_price = bakery_info["price"] + (10000 if extra_cheese else 0)
+            total_bakery_price = bakery_unit_price * bakery_qty
+
+            st.info(f"💡 Đơn giá 1 phần bánh: **{bakery_unit_price:,} VNĐ** | Tổng: **{total_bakery_price:,} VNĐ**")
+
+            if st.button("➕ Thêm Bánh Vào Giỏ", type="primary", use_container_width=True):
+                note_heat = "Hâm nóng" if heat_option else "Không hâm"
+                note_cheese = "Có phô mai" if extra_cheese else ""
+                note_final = f"{note_heat} | {note_cheese}".strip(" |")
+                item_data = {
+                    "Tên món": selected_bakery,
+                    "Loại": "Bánh",
+                    "Size": "Standard",
+                    "Ghi chú": note_final,
+                    "Đơn giá": bakery_unit_price,
+                    "Số lượng": bakery_qty,
+                    "Thành tiền": total_bakery_price
+                }
+                st.session_state.cart.append(item_data)
+                st.session_state.invoice_paid = False
+                safe_toast(f"Đã thêm {bakery_qty}x {selected_bakery}!", icon="🍞")
+
+    # ----- CỘT PHẢI: GIỎ HÀNG & THANH TOÁN -----
+    with col_right:
+        st.subheader("🛒 Giỏ Hàng Chi Tiết")
+
+        if not st.session_state.cart:
+            st.warning("Giỏ hàng đang trống.")
+        else:
+            df_cart = pd.DataFrame(st.session_state.cart)
+            st.dataframe(
+                df_cart[["Tên món", "Loại", "Ghi chú", "Số lượng", "Thành tiền"]],
+                use_container_width=True,
+                hide_index=True
+            )
+
+            if st.button("🗑️ Xóa toàn bộ giỏ hàng", use_container_width=True):
+                st.session_state.cart = []
+                st.session_state.invoice_paid = False
+                safe_rerun()
+
+            st.markdown("---")
+            total_price = int(df_cart["Thành tiền"].sum())
+            discount_percent = CUSTOMER_TIERS[selected_tier]
+            discount_amount = int(total_price * (discount_percent / 100))
+            final_price = total_price - discount_amount
+
+            st.write(f"**Tạm tính:** {total_price:,} VNĐ")
+            if discount_percent > 0:
+                st.write(f"**Ưu đãi thành viên ({discount_percent}%):** -{discount_amount:,} VNĐ")
+            
+            st.markdown(f"### Cần thanh toán: <span style='color:#D96B27; font-weight:800; font-size:1.6rem;'>{final_price:,} VNĐ</span>", unsafe_allow_html=True)
+
+            st.markdown("---")
+            if st.button("💳 XÁC NHẬN THANH TOÁN", type="primary", use_container_width=True):
+                st.session_state.invoice_paid = True
+                
+                # Ghi lịch sử bán hàng real-time
+                item_summary = ", ".join([f"{item['Tên món']} ({item['Số lượng']})" for item in st.session_state.cart])
+                new_sale = {
+                    "Thời gian": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                    "Khách hàng": customer_name if customer_name else "Khách vãng lai",
+                    "Loại món": service_type,
+                    "Số lượng": sum(item['Số lượng'] for item in st.session_state.cart),
+                    "Tạm tính": total_price,
+                    "Giảm giá": discount_percent,
+                    "Thành tiền": final_price,
+                    "Chi tiết": item_summary
+                }
+                st.session_state.sales_history.append(new_sale)
+                if hasattr(st, "balloons"):
+                    st.balloons()
+
+    # HIỂN THỊ HÓA ĐƠN & MÃ QR
+    if st.session_state.get("invoice_paid") and st.session_state.cart:
+        st.markdown("---")
+        st.success("🎉 Đơn hàng đã hoàn tất thanh toán!")
+
+        df_inv = pd.DataFrame(st.session_state.cart)
+        tot_p = int(df_inv["Thành tiền"].sum())
+        disc_p = CUSTOMER_TIERS[selected_tier]
+        fin_p = tot_p - int(tot_p * (disc_p / 100))
+
+        c_inv, c_qr = st.columns([1.2, 0.8])
+        with c_inv:
+            st.markdown("<div class='bill-box'>", unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align:center; color:#5C2C16;'>🍁 AUTUMN TEA & BAKERY LOUNGE</h2>", unsafe_allow_html=True)
+            st.write(f"**Thời gian:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+            st.write(f"**Khách hàng:** {customer_name if customer_name else 'Khách vãng lai'}")
+            st.table(df_inv[["Tên món", "Ghi chú", "Số lượng", "Thành tiền"]])
+            st.markdown(f"### 🎯 TỔNG THANH TOÁN: <span style='color:#D96B27'>{fin_p:,} VNĐ</span>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with c_qr:
+            st.subheader("📲 VietQR Thanh Toán Autopay")
+            qr_url = f"https://img.vietqr.io/image/MB-09999999999-compact2.png?amount={fin_p}&addInfo=AUTUMN%20TEA%20{customer_name}&accountName=AUTUMN%20LOUNGE"
+            st.image(qr_url, caption="Quét bằng App Ngân hàng hoặc MoMo", use_container_width=True)
+
+# ==================== GIAO DIỆN 2: DOANH THU REAL-TIME ====================
+elif selected_nav == "📊 Doanh Thu Real-Time":
+    st.subheader("📊 Báo Cáo Doanh Thu Real-Time (Cập Nhật Tự Động)")
+    
+    if not st.session_state.sales_history:
+        st.info("Chưa có giao dịch phát sinh.")
+    else:
+        df_sales = pd.DataFrame(st.session_state.sales_history)
+        
+        total_rev = int(df_sales["Thành tiền"].sum())
+        total_orders = len(df_sales)
+        total_items = int(df_sales["Số lượng"].sum())
+        avg_order = int(total_rev / total_orders) if total_orders > 0 else 0
+
+        # KPI Metrics
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+        with kpi1:
+            st.metric("💰 Tổng Doanh Thu", f"{total_rev:,} VNĐ")
+        with kpi2:
+            st.metric("📦 Tổng Đơn Hàng", f"{total_orders} đơn")
+        with kpi3:
+            st.metric("🧋 Bánh & Ly Bán Ra", f"{total_items} phần")
+        with kpi4:
+            st.metric("📈 Trung Bình / Đơn", f"{avg_order:,} VNĐ")
+
+        st.markdown("---")
+
+        col_c1, col_c2 = st.columns([1.2, 0.8])
+        with col_c1:
+            st.subheader("📈 Biểu Đồ Doanh Thu Dạng Chuỗi Thời Gian")
+            st.bar_chart(df_sales, x="Thời gian", y="Thành tiền", color="#D96B27")
+
+        with col_c2:
+            st.subheader("📜 Nhật Ký Đơn Hàng Bán Ra")
+            st.dataframe(
+                df_sales[["Thời gian", "Khách hàng", "Số lượng", "Thành tiền"]],
+                use_container_width=True,
+                hide_index=True
+            )
+
+        # Download File Excel CSV
+        csv_data = df_sales.to_csv(index=False).encode('utf-8-sig')
+        st.download_button(
+            label="📥 Tải Báo Cáo Doanh Thu (.CSV)",
+            data=csv_data,
+            file_name=f"Autumn_Revenue_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv",
+            type="primary"
+        )
+
+# ==================== GIAO DIỆN 3: QUẢN LÝ CA ====================
+else:
+    st.subheader("⚙️ Quản Lý Ca Làm Việc & Cấu Hình")
+    st.info("Trang quản lý ca trực thu ngân & cập nhật tỷ lệ chiết khấu ưu đãi.")
+    
+    c_staff1, c_staff2 = st.columns(2)
+    with c_staff1:
+        st.text_input
