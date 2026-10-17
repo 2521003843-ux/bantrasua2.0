@@ -5,7 +5,7 @@ import json
 import random
 
 # ---------------------------------------------------------
-# 1. CẤU HÌNH TRANG
+# 1. CẤU HÌNH TRANG (Đầu tiên)
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="Autumn Tea & Bakery Lounge 🍁 (All-in-One POS)",
@@ -463,7 +463,7 @@ if selected_nav == "🧋 Order Bán Hàng & POS":
 
             selected_toppings = st.multiselect("Topping:", options=list(TOPPING_OPTIONS.keys()))
             
-            # FEATURE 2: AI SMART UPSELL & RECOMMENDATION BOX
+            # AI SMART UPSELL & RECOMMENDATION BOX
             rec_bakery = drink_info.get("upsell_recommend", "🥐 Bánh Croissant Bơ Thụy Sĩ")
             st.markdown(f"""
                 <div class="ai-box">
@@ -595,17 +595,304 @@ if selected_nav == "🧋 Order Bán Hàng & POS":
                 
                 st.session_state.invoice_paid = True
                 
-                # 1. Deduct Inventory automatically
+                # 1. Trừ kho nguyên liệu
                 for item in st.session_state.cart:
                     ing_map = item.get("ingredients", {})
                     for ing_name, amount in ing_map.items():
                         if ing_name in st.session_state.inventory:
                             st.session_state.inventory[ing_name] = max(0, st.session_state.inventory[ing_name] - (amount * item["Số lượng"]))
 
-                # 2. Update Table Status
+                # 2. Cập nhật sơ đồ bàn
                 if selected_location in st.session_state.tables:
                     st.session_state.tables[selected_location]["status"] = "Đang ngồi"
                     st.session_state.tables[selected_location]["order_id"] = order_id
 
-                # 3. Push to KDS
-                kds_item_list = [{"name": i["Tên món"], "qty": i["Số lượng"], "note
+                # 3. Gửi đơn sang KDS Màn Hình Bếp
+                kds_item_list = [{"name": i["Tên món"], "qty": i["Số lượng"], "note": i["Ghi chú"]} for i in st.session_state.cart]
+                st.session_state.kds_orders.append({
+                    "id": order_id,
+                    "time": datetime.now().strftime("%H:%M"),
+                    "customer": customer_name if customer_name else "Khách vãng lai",
+                    "location": selected_location,
+                    "items": kds_item_list,
+                    "status": "Chờ chế biến"
+                })
+
+                # 4. Lưu báo cáo doanh thu real-time
+                item_summary = ", ".join([f"{item['Tên món']} ({item['Số lượng']})" for item in st.session_state.cart])
+                new_sale = {
+                    "Mã đơn": order_id,
+                    "Thời gian": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                    "Khách hàng": customer_name if customer_name else "Khách vãng lai",
+                    "Vị trí": selected_location,
+                    "Số lượng": sum(item['Số lượng'] for item in st.session_state.cart),
+                    "Thành tiền": final_price,
+                    "Chi tiết": item_summary
+                }
+                st.session_state.sales_history.append(new_sale)
+                st.session_state.last_completed_order = new_sale
+                
+                if hasattr(st, "balloons"):
+                    st.balloons()
+
+    # HIỂN THỊ HÓA ĐƠN THERMAL POS & MÃ VIETQR
+    if st.session_state.get("invoice_paid") and st.session_state.cart:
+        st.markdown("---")
+        st.success("🎉 Đơn hàng đã được thanh toán & chuyển xuống màn hình Bếp KDS!")
+
+        df_inv = pd.DataFrame(st.session_state.cart)
+        tot_p = int(df_inv["Thành tiền"].sum())
+        disc_p = CUSTOMER_TIERS[selected_tier]
+        fin_p = tot_p - int(tot_p * (disc_p / 100))
+
+        col_inv, col_qr = st.columns([1.1, 0.9])
+        with col_inv:
+            st.markdown("<div class='bill-thermal'>", unsafe_allow_html=True)
+            st.markdown("<h3 style='text-align:center;'>🍁 AUTUMN LOUNGE</h3>", unsafe_allow_html=True)
+            current_ord_id = st.session_state.last_completed_order['Mã đơn'] if st.session_state.last_completed_order else 'ORD-NEW'
+            st.markdown(f"<p style='text-align:center;'>Mã đơn: <strong>{current_ord_id}</strong></p>", unsafe_allow_html=True)
+            st.write(f"Thời gian: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+            st.write(f"Khách: {customer_name if customer_name else 'Khách vãng lai'} | {selected_location}")
+            st.markdown("---------------------------------")
+            for idx, item in enumerate(st.session_state.cart, 1):
+                st.write(f"{idx}. {item['Tên món']} (x{item['Số lượng']})")
+                st.caption(f"   {item['Ghi chú']} -> {item['Thành tiền']:,}đ")
+            st.markdown("---------------------------------")
+            st.write(f"Tạm tính: {tot_p:,} VNĐ")
+            st.write(f"Giảm giá ({disc_p}%): -{int(tot_p * disc_p / 100):,} VNĐ")
+            st.markdown(f"#### TỔNG CẦN THU: {fin_p:,} VNĐ")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with col_qr:
+            st.subheader("📲 VietQR Autopay")
+            qr_url = f"https://img.vietqr.io/image/MB-09999999999-compact2.png?amount={fin_p}&addInfo=AUTUMN%20TEA%20{customer_name}&accountName=AUTUMN%20LOUNGE"
+            st.image(qr_url, caption="Quét VietQR tự động hoàn tất thanh toán", use_container_width=True)
+
+        if st.button("🔄 Tiếp tục tạo đơn bán tiếp theo", use_container_width=True):
+            st.session_state.cart = []
+            st.session_state.invoice_paid = False
+            safe_rerun()
+
+# =========================================================
+# CHỨC NĂNG 2: MÀN HÌNH BẾP / BARISTA (KDS)
+# =========================================================
+elif selected_nav == "👨‍🍳 Màn Hình Bếp / Barista (KDS)":
+    st.subheader("👨‍🍳 Màn Hình Chế Biến Real-Time Bếp & Barista (KDS)")
+    st.info("💡 Màn hình tự động cập nhật đơn từ quầy POS. Barista nhấn chuyển trạng thái để báo hoàn thành đơn.")
+
+    if not st.session_state.kds_orders:
+        st.warning("Hiện tại không có đơn hàng nào chờ chế biến.")
+    else:
+        kds_col1, kds_col2, kds_col3 = st.columns(3)
+
+        pending_orders = [o for o in st.session_state.kds_orders if o["status"] == "Chờ chế biến"]
+        doing_orders = [o for o in st.session_state.kds_orders if o["status"] == "Đang chế biến"]
+        done_orders = [o for o in st.session_state.kds_orders if o["status"] == "Hoàn thành"]
+
+        with kds_col1:
+            st.markdown("### ⏳ Chờ Chế Biến")
+            for order in pending_orders:
+                st.markdown(f"""
+                    <div class="kds-card-pending">
+                        <h4>Mã đơn: {order['id']} ({order['time']})</h4>
+                        <p><strong>Khách:</strong> {order['customer']} | <strong>Vị trí:</strong> {order['location']}</p>
+                    </div>
+                """, unsafe_allow_html=True)
+                for item in order["items"]:
+                    st.write(f"• **{item['name']}** x{item['qty']}")
+                    st.caption(f"  Ghi chú: {item['note']}")
+                
+                if st.button(f"👉 Chuyển Đang Làm ({order['id']})", key=f"btn_doing_{order['id']}"):
+                    order["status"] = "Đang chế biến"
+                    safe_toast(f"Đã chuyển đơn {order['id']} sang Đang chế biến!", icon="👨‍🍳")
+                    safe_rerun()
+                st.markdown("---")
+
+        with kds_col2:
+            st.markdown("### ☕ Đang Chế Biến")
+            for order in doing_orders:
+                st.markdown(f"""
+                    <div class="kds-card-doing">
+                        <h4>Mã đơn: {order['id']} ({order['time']})</h4>
+                        <p><strong>Khách:</strong> {order['customer']} | <strong>Vị trí:</strong> {order['location']}</p>
+                    </div>
+                """, unsafe_allow_html=True)
+                for item in order["items"]:
+                    st.write(f"• **{item['name']}** x{item['qty']}")
+                    st.caption(f"  Ghi chú: {item['note']}")
+                
+                if st.button(f"✅ Hoàn Thành Bếp ({order['id']})", key=f"btn_done_{order['id']}"):
+                    order["status"] = "Hoàn thành"
+                    safe_toast(f"Đơn {order['id']} đã hoàn thành chế biến!", icon="✅")
+                    safe_rerun()
+                st.markdown("---")
+
+        with kds_col3:
+            st.markdown("### 🎉 Sẵn Sàng Giao Khách")
+            for order in done_orders:
+                st.markdown(f"""
+                    <div class="kds-card-done">
+                        <h4>Mã đơn: {order['id']} ({order['time']})</h4>
+                        <p><strong>Khách:</strong> {order['customer']} | <strong>Vị trí:</strong> {order['location']}</p>
+                        <p><span style="color:#10B981; font-weight:bold;">Status: Đã Hoàn Thành</span></p>
+                    </div>
+                """, unsafe_allow_html=True)
+
+# =========================================================
+# CHỨC NĂNG 3: SƠ ĐỒ QUẢN LÝ BÀN
+# =========================================================
+elif selected_nav == "🗺️ Sơ Đồ Quản Lý Bàn":
+    st.subheader("🗺️ Sơ Đồ Quản Lý Bàn Tại Quán")
+    
+    table_names = list(st.session_state.tables.keys())
+    t_cols = st.columns(4)
+    for idx, t_name in enumerate(table_names):
+        t_data = st.session_state.tables[t_name]
+        with t_cols[idx % 4]:
+            if t_data["status"] == "Trống":
+                st.markdown(f"""
+                    <div class="table-free">
+                        <h3>{t_name}</h3>
+                        <p>Trạng thái: 🟢 Trống</p>
+                    </div>
+                """, unsafe_allow_html=True)
+                if st.button(f"🪑 Mở Bàn ({t_name})", key=f"open_{t_name}"):
+                    st.session_state.tables[t_name]["status"] = "Đang ngồi"
+                    safe_toast(f"Đã mở {t_name}!", icon="🪑")
+                    safe_rerun()
+            else:
+                st.markdown(f"""
+                    <div class="table-occupied">
+                        <h3>{t_name}</h3>
+                        <p>Trạng thái: 🔴 Đang Ngồi</p>
+                        <p>Mã đơn: {t_data['order_id'] if t_data['order_id'] else 'Đang chọn món'}</p>
+                    </div>
+                """, unsafe_allow_html=True)
+                if st.button(f"🧹 Dọn Bàn / Trả Bàn ({t_name})", key=f"clear_{t_name}"):
+                    st.session_state.tables[t_name]["status"] = "Trống"
+                    st.session_state.tables[t_name]["order_id"] = None
+                    safe_toast(f"Đã dọn dẹp {t_name} về trạng thái trống!", icon="🧹")
+                    safe_rerun()
+
+# =========================================================
+# CHỨC NĂNG 4: QUẢN LÝ TỒN KHO & NGUYÊN LIỆU
+# =========================================================
+elif selected_nav == "📦 Quản Lý Tồn Kho":
+    st.subheader("📦 Bảng Quản Lý Tồn Kho & Nguyên Liệu Tự Động")
+    st.info("💡 Hệ thống tự động trừ kho nguyên liệu mỗi khi hoàn tất đơn hàng bán lẻ.")
+
+    inv_df = pd.DataFrame([
+        {"Tên nguyên liệu / Bánh": k, "Số lượng còn lại": v, "Cảnh báo": "🔴 Sắp hết" if v < 15 else "🟢 Đạt chuẩn"}
+        for k, v in st.session_state.inventory.items()
+    ])
+
+    st.dataframe(inv_df, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+    st.subheader("📥 Nhập Thêm Hàng / Cập Nhật Kho")
+    c_inv1, c_inv2, c_inv3 = st.columns([2, 1.5, 1])
+    with c_inv1:
+        inv_item = st.selectbox("Chọn món / nguyên liệu:", list(st.session_state.inventory.keys()))
+    with c_inv2:
+        add_amount = st.number_input("Số lượng nhập thêm:", min_value=1, value=100, step=10)
+    with c_inv3:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("➕ Nhập Kho", type="primary"):
+            st.session_state.inventory[inv_item] += add_amount
+            safe_toast(f"Đã nhập thêm +{add_amount} vào {inv_item}!", icon="📦")
+            safe_rerun()
+
+# =========================================================
+# CHỨC NĂNG 5: VÒNG QUAY MAY MẮN (GAMIFICATION)
+# =========================================================
+elif selected_nav == "🎁 Vòng Quay May Mắn":
+    st.subheader("🎁 Vòng Quay May Mắn Mùa Thu (Loyalty Rewards)")
+    
+    st.markdown("""
+        <div class="wheel-container">
+            <h2>🎰 VÒNG QUAY MAY MẮN AUTUMN REWARDS 🍂</h2>
+            <p>Dành cho khách hàng có đơn hàng từ 100,000 VNĐ trở lên</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    col_w1, col_w2, col_w3 = st.columns([1, 2, 1])
+    with col_w2:
+        if st.button("🎡 QUAY VÒNG QUAY MAY MẮN NGAY", type="primary", use_container_width=True):
+            selected_prize = random.choice(PRIZES)
+            st.session_state.wheel_prize = selected_prize
+            if hasattr(st, "balloons"):
+                st.balloons()
+
+        if st.session_state.wheel_prize:
+            st.markdown(f"""
+                <div style="background-color:#FEF3C7; border:2px dashed #D96B27; border-radius:12px; padding:20px; text-align:center; margin-top:20px;">
+                    <h3>🎉 CHÚC MỪNG QUÝ KHÁCH TRÚNG THƯỞNG!</h3>
+                    <h2 style="color:#D96B27;">{st.session_state.wheel_prize}</h2>
+                    <p>Mã trúng thưởng đã được lưu vào hệ thống tích điểm!</p>
+                </div>
+            """, unsafe_allow_html=True)
+
+# =========================================================
+# CHỨC NĂNG 6: DOANH THU REAL-TIME
+# =========================================================
+elif selected_nav == "📊 Doanh Thu Real-Time":
+    st.subheader("📊 Báo Cáo Doanh Thu Real-Time (Cập Nhật Tự Động)")
+    
+    if not st.session_state.sales_history:
+        st.info("Chưa có giao dịch phát sinh.")
+    else:
+        df_sales = pd.DataFrame(st.session_state.sales_history)
+        
+        total_rev = int(df_sales["Thành tiền"].sum())
+        total_orders = len(df_sales)
+        total_items = int(df_sales["Số lượng"].sum())
+        avg_order = int(total_rev / total_orders) if total_orders > 0 else 0
+
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+        with kpi1:
+            st.metric("💰 Tổng Doanh Thu", f"{total_rev:,} VNĐ")
+        with kpi2:
+            st.metric("📦 Tổng Đơn Hàng", f"{total_orders} đơn")
+        with kpi3:
+            st.metric("🧋 Bánh & Ly Bán Ra", f"{total_items} phần")
+        with kpi4:
+            st.metric("📈 Trung Bình / Đơn", f"{avg_order:,} VNĐ")
+
+        st.markdown("---")
+
+        col_c1, col_c2 = st.columns([1.2, 0.8])
+        with col_c1:
+            st.subheader("📈 Biểu Đồ Doanh Thu Dạng Chuỗi Thời Gian")
+            st.bar_chart(df_sales, x="Thời gian", y="Thành tiền", color="#D96B27")
+
+        with col_c2:
+            st.subheader("📜 Nhật Ký Đơn Hàng Bán Ra")
+            st.dataframe(
+                df_sales[["Mã đơn", "Thời gian", "Khách hàng", "Thành tiền"]],
+                use_container_width=True,
+                hide_index=True
+            )
+
+        csv_data = df_sales.to_csv(index=False).encode('utf-8-sig')
+        st.download_button(
+            label="📥 Tải Báo Cáo Doanh Thu CSV",
+            data=csv_data,
+            file_name=f"Autumn_Revenue_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv",
+            type="primary"
+        )
+
+# =========================================================
+# CHỨC NĂNG 7: QUẢN LÝ CA
+# =========================================================
+else:
+    st.subheader("⚙️ Quản Lý Ca Làm Việc & Cấu Hình")
+    c_staff1, c_staff2 = st.columns(2)
+    with c_staff1:
+        st.text_input("Tên Thu Ngân Ca Trực:", value="Nguyễn Văn Bình")
+        st.selectbox("Chọn Ca Làm:", ["Ca Sáng (07:00 - 15:00)", "Ca Chiều (15:00 - 23:00)"])
+    with c_staff2:
+        st.text_input("Mã Máy POS:", value="POS-AUTUMN-01")
+        st.number_input("Tiền Mặt Đầu Ca (VNĐ):", value=1000000, step=100000)
