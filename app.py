@@ -332,4 +332,4 @@ if selected_nav == "🧋 Order Nước & Bánh":
                     "Tên món": selected_drink,
                     "Loại": "Thức uống",
                     "Size": selected_size.split()[0],
-                    "Ghi chú": f"
+                    
