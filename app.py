@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 from datetime import datetime
 import json
@@ -146,14 +147,15 @@ st.markdown("""
         margin-bottom: 10px;
     }
 
-    /* Lucky Wheel Box */
+    /* Lucky Wheel Container */
     .wheel-container {
         background: linear-gradient(135deg, #5C2C16 0%, #D96B27 100%);
         color: white;
         border-radius: 16px;
-        padding: 25px;
+        padding: 20px;
         text-align: center;
         box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+        margin-bottom: 20px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -234,9 +236,6 @@ if "inventory" not in st.session_state:
         "Bánh Tiramisu Hạt Dẻ (Cái)": 8,
         "Bánh Cheesecake Chanh Dây (Cái)": 10
     }
-
-if "wheel_prize" not in st.session_state:
-    st.session_state.wheel_prize = None
 
 # ---------------------------------------------------------
 # 5. DỮ LIỆU THỰC ĐƠN
@@ -358,15 +357,6 @@ CUSTOMER_TIERS = {
     "Thành viên Gold Leaf 🍂 (Giảm 10%)": 10,
     "VIP Autumn Reserve 👑 (Giảm 15%)": 15
 }
-
-PRIZES = [
-    "🎟️ Voucher giảm 20% cho đơn tiếp theo",
-    "🥐 Tặng 1 Bánh Croissant Bơ Thụy Sĩ",
-    "🧋 Tặng 1 Topping Trân Châu Hoàng Gia",
-    "🌟 Tặng +500 Điểm Thưởng Thành Viên",
-    "🎁 Tặng 1 Ly Trà Sữa Quế Hoa Mùa Thu",
-    "🍀 Chúc bạn may mắn lần sau!"
-]
 
 # ---------------------------------------------------------
 # 6. SIDEBAR ĐIỀU HƯỚNG TỔNG HỢP
@@ -803,10 +793,10 @@ elif selected_nav == "📦 Quản Lý Tồn Kho":
             safe_rerun()
 
 # =========================================================
-# CHỨC NĂNG 5: VÒNG QUAY MAY MẮN (GAMIFICATION)
+# CHỨC NĂNG 5: VÒNG QUAY MAY MẮN (INTERACTIVE 8-SLOT CANVAS WHEEL)
 # =========================================================
 elif selected_nav == "🎁 Vòng Quay May Mắn":
-    st.subheader("🎁 Vòng Quay May Mắn Mùa Thu (Loyalty Rewards)")
+    st.subheader("🎁 Vòng Quay May Mắn 8 Ô Mùa Thu (Autumn Lucky Wheel)")
     
     st.markdown("""
         <div class="wheel-container">
@@ -814,25 +804,228 @@ elif selected_nav == "🎁 Vòng Quay May Mắn":
             <p>Dành cho khách hàng có đơn hàng từ 100,000 VNĐ trở lên</p>
         </div>
     """, unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
 
-    col_w1, col_w2, col_w3 = st.columns([1, 2, 1])
-    with col_w2:
-        if st.button("🎡 QUAY VÒNG QUAY MAY MẮN NGAY", type="primary", use_container_width=True):
-            selected_prize = random.choice(PRIZES)
-            st.session_state.wheel_prize = selected_prize
-            if hasattr(st, "balloons"):
-                st.balloons()
+    wheel_html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background-color: transparent;
+                text-align: center;
+                margin: 0;
+                padding: 10px;
+            }
+            .wheel-wrapper {
+                position: relative;
+                display: inline-block;
+                margin-top: 10px;
+            }
+            #wheelCanvas {
+                border-radius: 50%;
+                box-shadow: 0 8px 25px rgba(92, 44, 22, 0.35);
+                border: 6px solid #5C2C16;
+            }
+            .pointer {
+                position: absolute;
+                top: -15px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 0;
+                height: 0;
+                border-left: 18px solid transparent;
+                border-right: 18px solid transparent;
+                border-top: 32px solid #EF4444;
+                filter: drop-shadow(0px 3px 4px rgba(0,0,0,0.4));
+                z-index: 10;
+            }
+            .spin-button {
+                background: linear-gradient(135deg, #D96B27 0%, #B45309 100%);
+                color: white;
+                font-size: 1.25rem;
+                font-weight: bold;
+                padding: 14px 40px;
+                border: 2px solid #FEF3C7;
+                border-radius: 30px;
+                cursor: pointer;
+                box-shadow: 0 6px 15px rgba(217, 107, 39, 0.4);
+                margin-top: 20px;
+                transition: all 0.2s ease;
+            }
+            .spin-button:hover {
+                transform: scale(1.05);
+                background: linear-gradient(135deg, #F59E0B 0%, #D96B27 100%);
+            }
+            .spin-button:disabled {
+                background: #9CA3AF;
+                cursor: not-allowed;
+                transform: none;
+                box-shadow: none;
+            }
+            #prizeCard {
+                margin-top: 25px;
+                padding: 18px;
+                border-radius: 14px;
+                background: linear-gradient(135deg, #FEF3C7 0%, #FFFBEB 100%);
+                border: 2px dashed #D96B27;
+                display: none;
+                animation: popIn 0.5s ease forwards;
+            }
+            @keyframes popIn {
+                0% { opacity: 0; transform: scale(0.8); }
+                100% { opacity: 1; transform: scale(1); }
+            }
+            .prize-title {
+                color: #5C2C16;
+                font-size: 1.1rem;
+                margin: 0 0 6px 0;
+            }
+            .prize-value {
+                color: #D96B27;
+                font-size: 1.6rem;
+                font-weight: 800;
+                margin: 0;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="wheel-wrapper">
+            <div class="pointer"></div>
+            <canvas id="wheelCanvas" width="380" height="380"></canvas>
+        </div>
+        <br>
+        <button id="spinBtn" class="spin-button" onclick="spin()">🎡 QUAY NGAY</button>
 
-        if st.session_state.wheel_prize:
-            st.markdown(f"""
-                <div style="background-color:#FEF3C7; border:2px dashed #D96B27; border-radius:12px; padding:20px; text-align:center; margin-top:20px;">
-                    <h3>🎉 CHÚC MỪNG QUÝ KHÁCH TRÚNG THƯỞNG!</h3>
-                    <h2 style="color:#D96B27;">{st.session_state.wheel_prize}</h2>
-                    <p>Mã trúng thưởng đã được lưu vào hệ thống tích điểm!</p>
-                </div>
-            """, unsafe_allow_html=True)
+        <div id="prizeCard">
+            <p class="prize-title">🎉 CHÚC MỪNG QUÝ KHÁCH TRÚNG THƯỞNG!</p>
+            <p id="prizeText" class="prize-value"></p>
+        </div>
+
+        <script>
+            const canvas = document.getElementById("wheelCanvas");
+            const ctx = canvas.getContext("2d");
+            const spinBtn = document.getElementById("spinBtn");
+            const prizeCard = document.getElementById("prizeCard");
+            const prizeText = document.getElementById("prizeText");
+
+            const slices = [
+                { label: "Giảm 5%", color: "#F59E0B", textColor: "#FFFFFF" },
+                { label: "Tặng 1 Trà Sữa", color: "#D96B27", textColor: "#FFFFFF" },
+                { label: "Giảm 10%", color: "#5C2C16", textColor: "#FFFFFF" },
+                { label: "Croissant Bơ", color: "#FBBF24", textColor: "#5C2C16" },
+                { label: "Free Topping", color: "#E53E3E", textColor: "#FFFFFF" },
+                { label: "+500 Điểm", color: "#D96B27", textColor: "#FFFFFF" },
+                { label: "Ly Quế Hoa", color: "#B45309", textColor: "#FFFFFF" },
+                { label: "May Mắn Lần Sau", color: "#78350F", textColor: "#FFFFFF" }
+            ];
+
+            const numSlices = slices.length;
+            const sliceAngle = (2 * Math.PI) / numSlices;
+            let currentRotation = 0;
+            let isSpinning = false;
+
+            function drawWheel() {
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+                const radius = centerX - 10;
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                for (let i = 0; i < numSlices; i++) {
+                    const startAngle = currentRotation + i * sliceAngle;
+                    const endAngle = startAngle + sliceAngle;
+
+                    // Vẽ từng phần ô
+                    ctx.beginPath();
+                    ctx.moveTo(centerX, centerY);
+                    ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+                    ctx.closePath();
+                    ctx.fillStyle = slices[i].color;
+                    ctx.fill();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = "#FFFFFF";
+                    ctx.stroke();
+
+                    // Vẽ chữ trên từng ô
+                    ctx.save();
+                    ctx.translate(centerX, centerY);
+                    ctx.rotate(startAngle + sliceAngle / 2);
+                    ctx.textAlign = "right";
+                    ctx.fillStyle = slices[i].textColor;
+                    ctx.font = "bold 14px 'Segoe UI', sans-serif";
+                    ctx.fillText(slices[i].label, radius - 20, 5);
+                    ctx.restore();
+                }
+
+                // Vẽ vòng tròn trung tâm
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, 35, 0, 2 * Math.PI);
+                ctx.fillStyle = "#5C2C16";
+                ctx.fill();
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = "#FEF3C7";
+                ctx.stroke();
+
+                ctx.fillStyle = "#FFFFFF";
+                ctx.font = "bold 13px 'Segoe UI', sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("AUTUMN", centerX, centerY + 4);
+            }
+
+            drawWheel();
+
+            function spin() {
+                if (isSpinning) return;
+                isSpinning = true;
+                spinBtn.disabled = true;
+                prizeCard.style.display = "none";
+
+                // Chọn ngẫu nhiên index giải thưởng (0 -> 7)
+                const winnerIndex = Math.floor(Math.random() * numSlices);
+                
+                // Tính toán góc quay để kim ở đỉnh (270 độ / 1.5 * PI) chỉ đúng vào winnerIndex
+                const targetSliceAngle = (3 * Math.PI / 2) - (winnerIndex * sliceAngle + sliceAngle / 2);
+                
+                // Thêm 5 vòng quay đủ (10 * PI)
+                const totalRotationNeeded = currentRotation + (10 * Math.PI) + ((targetSliceAngle - (currentRotation % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI));
+
+                const duration = 4000; // 4 giây
+                const startRotation = currentRotation;
+                const startTime = performance.now();
+
+                function animate(currentTime) {
+                    const elapsed = currentTime - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+
+                    // Easing cubic ease-out
+                    const easeOut = 1 - Math.pow(1 - progress, 3);
+                    currentRotation = startRotation + (totalRotationNeeded - startRotation) * easeOut;
+
+                    drawWheel();
+
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    } else {
+                        isSpinning = false;
+                        spinBtn.disabled = false;
+                        
+                        // Hiển thị kết quả
+                        const prizeName = slices[winnerIndex].label;
+                        prizeText.innerText = prizeName;
+                        prizeCard.style.display = "block";
+                    }
+                }
+
+                requestAnimationFrame(animate);
+            }
+        </script>
+    </body>
+    </html>
+    """
+
+    components.html(wheel_html, height=620)
 
 # =========================================================
 # CHỨC NĂNG 6: DOANH THU REAL-TIME
