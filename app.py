@@ -3,17 +3,17 @@ import pandas as pd
 from datetime import datetime
 
 # ---------------------------------------------------------
-# 1. CẤU HÌNH TRANG (Bắt buộc ở dòng đầu tiên)
+# 1. CẤU HÌNH TRANG (Đầu tiên)
 # ---------------------------------------------------------
 st.set_page_config(
-    page_title="Autumn Tea Lounge 🍁 - Quầy Bán Hàng & Doanh Thu",
-    page_icon="🍁",
+    page_title="Autumn Tea & Bakery Lounge 🍁",
+    page_icon="🧋",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # ---------------------------------------------------------
-# 2. BỘ TƯƠNG THÍCH PHIÊN BẢN STREAMLIT
+# 2. HÀM TƯƠNG THÍCH BẢN STREAMLIT
 # ---------------------------------------------------------
 def safe_rerun():
     if hasattr(st, "rerun"):
@@ -28,16 +28,14 @@ def safe_toast(msg, icon="🍁"):
         st.success(f"{icon} {msg}")
 
 # ---------------------------------------------------------
-# 3. TRANG TRÍ CSS CHỦ ĐỀ TRÀ SỮA MÙA THU (AUTUMN THEME 🍁)
+# 3. CUSTOM CSS: BANNER ẢNH NỀN & CHỦ ĐỀ MÙA THU 🍁
 # ---------------------------------------------------------
 st.markdown("""
     <style>
-    /* Bảng màu Mùa Thu: Cam Lá Phong, Nâu Ấm, Vàng Hổ Phách, Kem Ngọt */
     :root {
         --autumn-orange: #D96B27;
         --autumn-brown: #5C2C16;
-        --autumn-gold: #D69E2E;
-        --autumn-cream: #FAF5E8;
+        --autumn-gold: #F59E0B;
         --autumn-bg: #FDFBF7;
     }
 
@@ -45,65 +43,54 @@ st.markdown("""
         background-color: var(--autumn-bg);
     }
 
-    /* Hero Banner Mùa Thu */
-    .autumn-banner {
-        background: linear-gradient(135deg, #5C2C16 0%, #D96B27 100%);
+    /* BANNER TIÊU ĐỀ CÓ ẢNH NỀN TONE MÙA THU CỦA QUÁN */
+    .hero-banner-img {
+        position: relative;
+        background-image: linear-gradient(rgba(44, 19, 9, 0.75), rgba(92, 44, 22, 0.85)), 
+                          url('https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&w=1600&q=80');
+        background-size: cover;
+        background-position: center;
         border-radius: 16px;
-        padding: 28px 24px;
+        padding: 40px 20px;
         color: white;
         text-align: center;
         margin-bottom: 25px;
-        box-shadow: 0 8px 20px rgba(217, 107, 39, 0.2);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.25);
     }
-    .autumn-banner h1 {
+    
+    .hero-banner-img h1 {
         color: #FFFFFF !important;
         font-family: 'Georgia', serif;
         font-weight: 800;
-        font-size: 2.3rem;
-        margin-bottom: 6px;
+        font-size: 2.5rem;
+        margin-bottom: 8px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
     }
-    .autumn-banner p {
-        color: #FCD34D;
-        font-size: 1.1rem;
+    
+    .hero-banner-img p {
+        color: #FBBF24;
+        font-size: 1.2rem;
         margin: 0;
         font-style: italic;
+        font-weight: 500;
     }
 
-    /* Thẻ Card Signature Drinks */
-    .sig-card {
+    /* Card Sản Phẩm */
+    .product-card {
         background-color: #FFFFFF;
-        border-radius: 14px;
-        padding: 12px;
-        border: 2px solid #F3E8D5;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        border-radius: 12px;
+        padding: 10px;
+        border: 1px solid #E2D9CC;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.04);
         text-align: center;
-        transition: transform 0.2s ease, border-color 0.2s;
+        transition: transform 0.2s;
     }
-    .sig-card:hover {
+    .product-card:hover {
         transform: translateY(-4px);
         border-color: var(--autumn-orange);
     }
-    .sig-title {
-        font-weight: 700;
-        color: var(--autumn-brown);
-        margin-top: 8px;
-        font-size: 0.95rem;
-    }
-    .sig-price {
-        color: var(--autumn-orange);
-        font-weight: 800;
-        font-size: 1.05rem;
-    }
-    .badge-autumn {
-        background-color: var(--autumn-orange);
-        color: white;
-        padding: 3px 10px;
-        border-radius: 15px;
-        font-size: 0.75rem;
-        font-weight: 600;
-    }
-
-    /* Thẻ Hóa Đơn Mùa Thu */
+    
+    /* Hóa đơn Vintage */
     .bill-box {
         background-color: #FFFFFF;
         border: 2px dashed var(--autumn-orange);
@@ -111,50 +98,44 @@ st.markdown("""
         padding: 22px;
         box-shadow: 0 6px 16px rgba(0,0,0,0.06);
     }
-
-    /* Custom Metric Cards cho Doanh Thu */
-    .metric-card {
-        background-color: #FFFFFF;
-        border-left: 5px solid var(--autumn-orange);
-        border-radius: 10px;
-        padding: 15px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.04);
-        margin-bottom: 10px;
-    }
     </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 4. DANH MỤC MÓN NƯỚC MÙA THU & HÌNH ẢNH
+# 4. KHỞI TẠO SESSION STATE (DỮ LIỆU BÁN HÀNG)
 # ---------------------------------------------------------
-SIGNATURE_DRINKS = [
-    {
-        "name": "Trà Sữa Quế Hoa Mùa Thu",
-        "price": "58,000 VNĐ",
-        "tag": "🍁 Signature Mùa Thu",
-        "img": "https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&w=500&q=80"
-    },
-    {
-        "name": "Latte Hạt Dẻ Nướng Hazelnut",
-        "price": "62,000 VNĐ",
-        "tag": "🌰 Cozy Autumn",
-        "img": "https://images.unsplash.com/photo-1536256263959-770b48d82b0a?auto=format&fit=crop&w=500&q=80"
-    },
-    {
-        "name": "Trà Hồng Trà Táo Mật Maple",
-        "price": "55,000 VNĐ",
-        "tag": "🍎 Fresh Autumn",
-        "img": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=500&q=80"
-    },
-    {
-        "name": "Trà Sữa Ô Long Lúa Mạch",
-        "price": "52,000 VNĐ",
-        "tag": "🌾 Warm & Creamy",
-        "img": "https://images.unsplash.com/photo-1485808191679-5f86510681a2?auto=format&fit=crop&w=500&q=80"
-    }
-]
+if "cart" not in st.session_state:
+    st.session_state.cart = []
+if "invoice_paid" not in st.session_state:
+    st.session_state.invoice_paid = False
+if "sales_history" not in st.session_state:
+    st.session_state.sales_history = [
+        {
+            "Thời gian": "17/10/2026 14:15:20",
+            "Khách hàng": "Anh Minh",
+            "Loại món": "Trà sữa + Bánh",
+            "Số lượng": 3,
+            "Tạm tính": 154000,
+            "Giảm giá": 5,
+            "Thành tiền": 146300,
+            "Chi tiết": "Trà Sữa Quế Hoa (1), Bánh Mì Bơ Tỏi (1), Latte Hạt Dẻ (1)"
+        },
+        {
+            "Thời gian": "17/10/2026 15:30:10",
+            "Khách hàng": "Chị Hoàng Yến",
+            "Loại món": "Trà trái cây",
+            "Số lượng": 1,
+            "Tạm tính": 55000,
+            "Giảm giá": 10,
+            "Thành tiền": 49500,
+            "Chi tiết": "Trà Hồng Trà Táo Mật Maple (1)"
+        }
+    ]
 
-MENU_ITEMS = {
+# ---------------------------------------------------------
+# 5. DỮ LIỆU MENU CẢI TIẾN (ĐỒ UỐNG & BÁNH MÌ)
+# ---------------------------------------------------------
+DRINK_MENU = {
     "🍵 Trà Sữa Mùa Thu 🍁": {
         "Trà Sữa Quế Hoa Mùa Thu": {
             "price": 58000,
@@ -173,7 +154,7 @@ MENU_ITEMS = {
             "img": "https://images.unsplash.com/photo-1558857563-b371033873b8?auto=format&fit=crop&w=600&q=80"
         }
     },
-    "🍎 Trà Trái Cây & Refresher 🍂": {
+    "🍎 Trà Trái Cây Refreshers 🍂": {
         "Trà Hồng Trà Táo Mật Maple": {
             "price": 55000,
             "img": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=600&q=80"
@@ -195,7 +176,39 @@ MENU_ITEMS = {
         "Cold Brew Trà Đen Macchiato": {
             "price": 60000,
             "img": "https://images.unsplash.com/photo-1517701604599-bb29b565090c?auto=format&fit=crop&w=600&q=80"
+        },
+        "Matcha Frappuccino Kem Béo": {
+            "price": 68000,
+            "img": "https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=600&q=80"
         }
+    }
+}
+
+BAKERY_MENU = {
+    "🥪 Bánh Mì Sandwich Thịt Nướng BBQ": {
+        "price": 45000,
+        "img": "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=600&q=80",
+        "desc": "Bánh mì Sandwich giòn kẹp thịt nướng sốt BBQ đậm đà"
+    },
+    "🧄 Bánh Mì Bơ Tỏi Phô Mai Nướng": {
+        "price": 38000,
+        "img": "https://images.unsplash.com/photo-1573140247632-f8fd74997d5c?auto=format&fit=crop&w=600&q=80",
+        "desc": "Bánh mì sốt bơ tỏi thơm lừng ngập tràn phô mai kéo sợi"
+    },
+    "🥐 Bánh Croissant Bơ Thụy Sĩ": {
+        "price": 35000,
+        "img": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=600&q=80",
+        "desc": "Bánh sừng bò nướng giòn xốp thơm bơ ngậy"
+    },
+    "🍰 Bánh Tiramisu Hạt Dẻ Autumn": {
+        "price": 48000,
+        "img": "https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?auto=format&fit=crop&w=600&q=80",
+        "desc": "Bánh Tiramisu mềm mịn thơm vị cà phê & hạt dẻ nướng"
+    },
+    "🧀 Bánh Cheesecake Chanh Dây": {
+        "price": 45000,
+        "img": "https://images.unsplash.com/photo-1533134242443-d4fd215305ad?auto=format&fit=crop&w=600&q=80",
+        "desc": "Cheesecake chua ngọt thanh mát hòa quyện vị chanh dây"
     }
 }
 
@@ -208,10 +221,6 @@ TOPPING_OPTIONS = {
     "Pudding Trứng Custard": 10000,
     "Kem Cheese Foam": 12000
 }
-SUGAR_LEVELS = ["100% (Tiêu chuẩn)", "70% (Ít ngọt)", "50%", "30%", "0%"]
-ICE_LEVELS = ["100% (Tiêu chuẩn)", "70%", "50%", "30%", "0% (Không đá)", "🔥 Uống Nóng"]
-SERVICE_TYPES = ["☕ Uống tại quán", "🛍️ Mang đi", "🛵 Giao hàng"]
-
 CUSTOMER_TIERS = {
     "Khách vãng lai": 0,
     "Thành viên Maple 🍁 (Giảm 5%)": 5,
@@ -220,306 +229,107 @@ CUSTOMER_TIERS = {
 }
 
 # ---------------------------------------------------------
-# 5. KHỞI TẠO SESSION STATE
+# 6. SIDEBAR ĐIỀU HƯỚNG & QUẢN LÝ CA LÀM
 # ---------------------------------------------------------
-if "cart" not in st.session_state:
-    st.session_state.cart = []
-if "invoice_paid" not in st.session_state:
-    st.session_state.invoice_paid = False
-if "sales_history" not in st.session_state:
-    # Lịch sử doanh thu mẫu để hiển thị ngay
-    st.session_state.sales_history = [
-        {
-            "Thời gian": "17/10/2026 14:15:20",
-            "Khách hàng": "Anh Minh",
-            "Hình thức": "☕ Uống tại quán",
-            "Số món": 2,
-            "Tạm tính": 116000,
-            "Giảm giá": 5,
-            "Thành tiền": 110200,
-            "Các món": "Trà Sữa Quế Hoa Mùa Thu (1), Latte Hạt Dẻ Nướng Hazelnut (1)"
-        },
-        {
-            "Thời gian": "17/10/2026 15:30:10",
-            "Khách hàng": "Chị Hoàng Yến",
-            "Hình thức": "🛍️ Mang đi",
-            "Số món": 1,
-            "Tạm tính": 55000,
-            "Giảm giá": 10,
-            "Thành tiền": 49500,
-            "Các món": "Trà Hồng Trà Táo Mật Maple (1)"
-        }
-    ]
+with st.sidebar:
+    st.image("https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=500&q=80", use_container_width=True)
+    st.markdown("<h2 style='text-align:center; color:#5C2C16;'>🍁 AUTUMN LOUNGE</h2>", unsafe_allow_html=True)
+    st.markdown("---")
+    
+    # Menu Điều Hướng Trang
+    selected_nav = st.radio(
+        "📌 Menu Chức Năng:",
+        ["🧋 Order Nước & Bánh", "📊 Doanh Thu Real-Time", "⚙️ Quản Lý Ca & Hệ Thống"]
+    )
+    
+    st.markdown("---")
+    st.caption("👤 **Thu ngân ca trực:** Nguyễn Văn Bình")
+    st.caption("⏰ **Ca làm việc:** Ca Sáng (07:00 - 15:00)")
+    
+    # Widget Doanh thu nhanh ngay trong Sidebar
+    df_sales_quick = pd.DataFrame(st.session_state.sales_history)
+    quick_revenue = int(df_sales_quick["Thành tiền"].sum()) if not df_sales_quick.empty else 0
+    quick_orders = len(df_sales_quick)
+    
+    st.markdown("---")
+    st.markdown("### 📈 Doanh thu ca hiện tại")
+    st.metric(label="Tổng doanh thu", value=f"{quick_revenue:,} VNĐ")
+    st.caption(f"Số đơn đã hoàn tất: **{quick_orders} đơn**")
 
 # ---------------------------------------------------------
-# 6. HEADER CHỦ ĐỀ MÙA THU 🍁
+# 7. BANNER TIÊU ĐỀ HÌNH ẢNH MÙA THU
 # ---------------------------------------------------------
 st.markdown("""
-    <div class="autumn-banner">
-        <h1>🍁 AUTUMN TEA LOUNGE & POS 🍂</h1>
-        <p>"Thưởng thức hương vị Trà Sữa Mùa Thu ấm áp & ngọt ngào"</p>
+    <div class="hero-banner-img">
+        <h1>🍁 AUTUMN TEA & BAKERY LOUNGE 🍞</h1>
+        <p>"Thưởng thức hương vị Trà Sữa Mùa Thu & Bánh Mì Nướng Nóng Giòn"</p>
     </div>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 7. PHÂN CHIA TABS CÔNG NĂNG
+# 8. GIAO DIỆN CHÍNH THEO ĐIỀU HƯỚNG SIDEBAR
 # ---------------------------------------------------------
-tab_order, tab_analytics = st.tabs(["🧋 Quầy Gọi Món (Order POS)", "📊 Báo Cáo Doanh Thu Real-Time"])
 
-# =========================================================
-# TAB 1: QUẦY BÁN HÀNG & ORDER
-# =========================================================
-with tab_order:
-    # Gallery Signature Mùa Thu
-    st.subheader("🌟 Signature Collection - Mùa Thu 🍁")
-    cols = st.columns(4)
-    for idx, drink in enumerate(SIGNATURE_DRINKS):
-        with cols[idx]:
-            st.markdown(f"""
-                <div class="sig-card">
-                    <img src="{drink['img']}" style="width:100%; height:120px; object-fit:cover; border-radius:8px;">
-                    <div class="sig-title">{drink['name']}</div>
-                    <div class="sig-price">{drink['price']}</div>
-                    <span class="badge-autumn">{drink['tag']}</span>
-                </div>
-            """, unsafe_allow_html=True)
+# ==================== GIAO DIỆN 1: POS CALL ORDER ====================
+if selected_nav == "🧋 Order Nước & Bánh":
+    
+    col_left, col_right = st.columns([1.2, 0.8], gap="large")
 
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    col_left, col_right = st.columns([1.15, 0.85], gap="medium")
-
-    # ----- CỘT TRÁI: CHỌN MÓN & TÙY CHỈNH -----
     with col_left:
-        st.subheader("📝 Thông tin Đơn hàng & Tùy chọn")
-        
+        # Thông tin khách hàng
         c1, c2, c3 = st.columns([1.2, 1.2, 1])
         with c1:
-            customer_name = st.text_input("Tên khách hàng:", placeholder="Nhập tên...")
+            customer_name = st.text_input("Tên khách hàng:", placeholder="Nhập tên khách...")
         with c2:
             selected_tier = st.selectbox("Hạng thành viên:", list(CUSTOMER_TIERS.keys()))
         with c3:
-            service_type = st.selectbox("Phục vụ:", SERVICE_TYPES)
+            service_type = st.selectbox("Hình thức:", ["☕ Tại quán", "🛍️ Mang đi", "🛵 Giao hàng"])
 
+        # TAB Chọn giữa Thức Uống và Bánh Ăn Kèm
         st.markdown("---")
-        
-        # Chọn Nhóm & Món
-        category = st.selectbox("🎯 Nhóm thức uống Mùa Thu:", list(MENU_ITEMS.keys()))
-        current_category_menu = MENU_ITEMS[category]
+        item_type = st.radio("🎯 Chọn Loại Sản Phẩm:", ["🧋 Thức Uống Mùa Thu", "🍞 Bánh Mì & Bánh Ngọt Ăn Kèm"], horizontal=True)
 
-        c_item, c_qty = st.columns([2.5, 1])
-        with c_item:
-            selected_tea = st.selectbox("Chọn món nước:", list(current_category_menu.keys()))
-        with c_qty:
-            quantity = st.number_input("Số lượng:", min_value=1, value=1, step=1)
+        if item_type == "🧋 Thức Uống Mùa Thu":
+            category = st.selectbox("Nhóm thức uống:", list(DRINK_MENU.keys()))
+            current_category_menu = DRINK_MENU[category]
 
-        # HÌNH ẢNH MÓN NƯỚC HIỂN THỊ TRỰC QUAN
-        drink_info = current_category_menu[selected_tea]
-        col_img, col_opts = st.columns([1, 2])
-        
-        with col_img:
-            st.image(drink_info["img"], caption=f"📷 {selected_tea}", use_container_width=True)
+            c_item, c_qty = st.columns([2.5, 1])
+            with c_item:
+                selected_drink = st.selectbox("Tên món nước:", list(current_category_menu.keys()))
+            with c_qty:
+                drink_qty = st.number_input("Số lượng:", min_value=1, value=1, step=1, key="drink_qty")
 
-        with col_opts:
-            c_sz, c_mlk = st.columns(2)
-            with c_sz:
-                selected_size = st.selectbox("Size:", list(SIZE_OPTIONS.keys()))
-            with c_mlk:
-                selected_milk = st.selectbox("Sữa:", MILK_OPTIONS)
-
-            c_sug, c_ice = st.columns(2)
-            with c_sug:
-                selected_sugar = st.selectbox("Đường:", SUGAR_LEVELS)
-            with c_ice:
-                selected_ice = st.selectbox("Đá / Nóng:", ICE_LEVELS)
-
-        selected_toppings = st.multiselect("Topping đặc biệt:", options=list(TOPPING_OPTIONS.keys()))
-        custom_note = st.text_input("Ghi chú cho Barista:", placeholder="Ví dụ: Ít ngọt, đậy nắp cẩn thận...")
-
-        # Tính đơn giá ly
-        base_price = drink_info["price"]
-        size_price = SIZE_OPTIONS[selected_size]
-        milk_extra = 10000 if "Oat" in selected_milk or "hạnh nhân" in selected_milk else 0
-        topping_price = sum(TOPPING_OPTIONS[t] for t in selected_toppings)
-        
-        unit_price = base_price + size_price + milk_extra + topping_price
-        item_total = unit_price * quantity
-
-        st.info(f"💡 Đơn giá 1 ly: **{unit_price:,} VNĐ** | Tổng món: **{item_total:,} VNĐ**")
-
-        if st.button("➕ Thêm vào giỏ hàng 🍁", type="primary", use_container_width=True):
-            topping_str = ", ".join(selected_toppings) if selected_toppings else "Không"
-            item_data = {
-                "Tên món": selected_tea,
-                "Size": selected_size.split()[0],
-                "Loại sữa": selected_milk.split("(")[0].strip(),
-                "Đường": selected_sugar.split()[0],
-                "Đá": selected_ice.split()[0],
-                "Topping": topping_str,
-                "Ghi chú": custom_note,
-                "Đơn giá": unit_price,
-                "Số lượng": quantity,
-                "Thành tiền": item_total
-            }
-            st.session_state.cart.append(item_data)
-            st.session_state.invoice_paid = False
-            safe_toast(f"Đã thêm {quantity}x {selected_tea} vào giỏ hàng!", icon="🍂")
-
-    # ----- CỘT PHẢI: GIỎ HÀNG & THANH TOÁN -----
-    with col_right:
-        st.subheader("🛒 Giỏ hàng Mùa Thu")
-
-        if not st.session_state.cart:
-            st.warning("Giỏ hàng đang trống. Vui lòng chọn món bên trái.")
-        else:
-            df_cart = pd.DataFrame(st.session_state.cart)
+            drink_info = current_category_menu[selected_drink]
             
-            st.dataframe(
-                df_cart[["Tên món", "Size", "Topping", "Số lượng", "Thành tiền"]],
-                use_container_width=True,
-                hide_index=True
-            )
+            # Khối hiển thị ảnh & tùy chọn nước
+            c_img, c_opts = st.columns([1, 1.8])
+            with c_img:
+                st.image(drink_info["img"], caption=selected_drink, use_container_width=True)
+            with c_opts:
+                sz_col, mlk_col = st.columns(2)
+                with sz_col:
+                    selected_size = st.selectbox("Size:", list(SIZE_OPTIONS.keys()))
+                with mlk_col:
+                    selected_milk = st.selectbox("Tùy chọn Sữa:", MILK_OPTIONS)
 
-            if st.button("🗑️ Xóa toàn bộ giỏ hàng", use_container_width=True):
-                st.session_state.cart = []
-                st.session_state.invoice_paid = False
-                safe_rerun()
+                sug_col, ice_col = st.columns(2)
+                with sug_col:
+                    selected_sugar = st.selectbox("Mức đường:", ["100%", "70%", "50%", "30%", "0%"])
+                with ice_col:
+                    selected_ice = st.selectbox("Mức đá:", ["100%", "70%", "50%", "30%", "🔥 Uống Nóng"])
 
-            st.markdown("---")
+            selected_toppings = st.multiselect("Topping thêm:", options=list(TOPPING_OPTIONS.keys()))
             
-            total_price = int(df_cart["Thành tiền"].sum())
-            discount_percent = CUSTOMER_TIERS[selected_tier]
-            discount_amount = int(total_price * (discount_percent / 100))
-            final_price = total_price - discount_amount
-            stars_earned = final_price // 50000
+            # Tính đơn giá ly
+            unit_price = drink_info["price"] + SIZE_OPTIONS[selected_size] + (10000 if "Oat" in selected_milk or "hạnh nhân" in selected_milk else 0) + sum(TOPPING_OPTIONS[t] for t in selected_toppings)
+            total_item_price = unit_price * drink_qty
 
-            st.write(f"**Tạm tính:** {total_price:,} VNĐ")
-            if discount_percent > 0:
-                st.write(f"**Ưu đãi hạng ({discount_percent}%):** -{discount_amount:,} VNĐ")
-            
-            st.markdown(f"### Tổng thanh toán: <span style='color:#D96B27; font-weight:800; font-size:1.6rem;'>{final_price:,} VNĐ</span>", unsafe_allow_html=True)
-            st.caption(f"🍁 Điểm tích lũy: **+{stars_earned} Lá Phong Mùa Thu**")
+            st.info(f"💡 Đơn giá 1 ly: **{unit_price:,} VNĐ** | Tổng: **{total_item_price:,} VNĐ**")
 
-            st.markdown("---")
-            if st.button("💳 XÁC NHẬN THANH TOÁN", type="primary", use_container_width=True):
-                st.session_state.invoice_paid = True
-                
-                # TỰ ĐỘNG GHI LẠI VÀO BÁO CÁO DOANH THU REAL-TIME
-                items_summary = ", ".join([f"{item['Tên món']} ({item['Số lượng']})" for item in st.session_state.cart])
-                
-                new_sale = {
-                    "Thời gian": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                    "Khách hàng": customer_name if customer_name else "Khách vãng lai",
-                    "Hình thức": service_type,
-                    "Số món": sum(item['Số lượng'] for item in st.session_state.cart),
-                    "Tạm tính": total_price,
-                    "Giảm giá": discount_percent,
-                    "Thành tiền": final_price,
-                    "Các món": items_summary
-                }
-                st.session_state.sales_history.append(new_sale)
-                
-                if hasattr(st, "balloons"):
-                    st.balloons()
-
-    # ----- HIỂN THỊ HÓA ĐƠN & VIETQR KHI THANH TOÁN SUCCESS -----
-    if st.session_state.get("invoice_paid") and st.session_state.cart:
-        st.markdown("---")
-        st.success("🎉 Thanh toán thành công! Đơn hàng đã được lưu vào hệ thống Doanh Thu Real-Time.")
-
-        df_inv = pd.DataFrame(st.session_state.cart)
-        tot_pr = int(df_inv["Thành tiền"].sum())
-        disc_pct = CUSTOMER_TIERS[selected_tier]
-        fin_pr = tot_pr - int(tot_pr * (disc_pct / 100))
-
-        col_inv, col_qr = st.columns([1.2, 0.8])
-        
-        with col_inv:
-            st.markdown("<div class='bill-box'>", unsafe_allow_html=True)
-            st.markdown("""
-                <div style="text-align:center;">
-                    <h2 style="color:#5C2C16; margin-bottom:0;">🍁 AUTUMN TEA LOUNGE</h2>
-                    <p style="color:#D96B27; font-size:0.85rem; margin-top:0;">HÓA ĐƠN BÁN HÀNG MÙA THU</p>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            st.write(f"**Thời gian:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
-            st.write(f"**Khách hàng:** {customer_name if customer_name else 'Khách vãng lai'} ({selected_tier.split('(')[0]})")
-            st.write(f"**Hình thức:** {service_type}")
-            
-            st.table(df_inv[["Tên món", "Size", "Loại sữa", "Topping", "Số lượng", "Thành tiền"]])
-            
-            st.markdown(f"**Tổng tiền:** {tot_pr:,} VNĐ")
-            st.markdown(f"**Giảm giá:** {disc_pct}%")
-            st.markdown(f"### 🎯 TỔNG THANH TOÁN: <span style='color:#D96B27'>{fin_pr:,} VNĐ</span>", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        with col_qr:
-            st.subheader("📲 Quét VietQR Thanh Toán")
-            bank_id = "MB"
-            account_no = "09999999999"
-            account_name = "AUTUMN TEA LOUNGE"
-            qr_url = f"https://img.vietqr.io/image/{bank_id}-{account_no}-compact2.png?amount={fin_pr}&addInfo=Thanh%20toan%20AutumnTea%20{customer_name}&accountName={account_name}"
-            st.image(qr_url, caption="Mã VietQR tự động khớp đúng số tiền thanh toán", use_container_width=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("🔄 Tạo đơn bán tiếp theo", type="secondary", use_container_width=True):
-            st.session_state.cart = []
-            st.session_state.invoice_paid = False
-            safe_rerun()
-
-# =========================================================
-# TAB 2: BÁO CÁO DOANH THU REAL-TIME 📊
-# =========================================================
-with tab_analytics:
-    st.subheader("📊 Báo Cáo Doanh Thu Theo Thời Gian Thực (Real-Time Analytics)")
-    
-    if not st.session_state.sales_history:
-        st.info("Chưa có giao dịch nào được ghi nhận trong phiên hôm nay.")
-    else:
-        df_sales = pd.DataFrame(st.session_state.sales_history)
-        
-        total_rev = int(df_sales["Thành tiền"].sum())
-        total_orders = len(df_sales)
-        total_items_sold = int(df_sales["Số món"].sum())
-        avg_order_val = int(total_rev / total_orders) if total_orders > 0 else 0
-
-        # Hiển thị Metrics tổng quan
-        m1, m2, m3, m4 = st.columns(4)
-        with m1:
-            st.metric(label="💰 Tổng Doanh Thu", value=f"{total_rev:,} VNĐ")
-        with m2:
-            st.metric(label="📦 Tổng Số Đơn hàng", value=f"{total_orders} đơn")
-        with m3:
-            st.metric(label="🧋 Tổng Ly Bán Ra", value=f"{total_items_sold} ly")
-        with m4:
-            st.metric(label="📈 Giá Trị Đơn TB", value=f"{avg_order_val:,} VNĐ")
-
-        st.markdown("---")
-
-        # Biểu đồ Doanh Thu & Bảng Lịch Sử
-        col_chart, col_history = st.columns([1, 1])
-
-        with col_chart:
-            st.subheader("📈 Biểu đồ Doanh Thu Theo Giao Dịch")
-            # Tạo biểu đồ doanh thu theo đơn vị giao dịch
-            st.bar_chart(df_sales, x="Thời gian", y="Thành tiền", color="#D96B27")
-
-        with col_history:
-            st.subheader("📜 Nhật Ký Giao Dịch Chi Tiết")
-            st.dataframe(
-                df_sales[["Thời gian", "Khách hàng", "Số món", "Thành tiền", "Hình thức"]],
-                use_container_width=True,
-                hide_index=True
-            )
-
-        st.markdown("---")
-        
-        # Nút Xuất file Excel / CSV báo cáo
-        csv_data = df_sales.to_csv(index=False).encode('utf-8-sig')
-        st.download_button(
-            label="📥 Tải Báo Cáo Doanh Thu (.CSV)",
-            data=csv_data,
-            file_name=f"AutumnTea_Revenue_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-            mime="text/csv",
-            type="primary"
-        )
+            if st.button("➕ Thêm Thức Uống Vào Giỏ", type="primary", use_container_width=True):
+                topping_str = ", ".join(selected_toppings) if selected_toppings else "Không"
+                item_data = {
+                    "Tên món": selected_drink,
+                    "Loại": "Thức uống",
+                    "Size": selected_size.split()[0],
+                    "Ghi chú": f"
